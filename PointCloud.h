@@ -43,7 +43,7 @@ public:
 
     pcl::PointCloud<pcl::PointXYZRGB> pointCloudFromDepthRGB(int index);
 
-    static cv::Mat imageFromPointCloud(std::vector<cv::Point3f> &points);
+    cv::Mat imageFromPointCloud(pcl::PointCloud<pcl::PointXYZ> &inputPCD, int &index);
 
     void setCameraMatrix(const float &f_x, const float &f_y, const float &c_x, const float &c_y);
 

@@ -86,9 +86,31 @@ pcl::PointCloud<pcl::PointXYZRGB> PointCloud::pointCloudFromDepthRGB(int index) 
 }
 
 
+cv::Mat PointCloud::imageFromPointCloud(pcl::PointCloud<pcl::PointXYZ> &inputPCD, int &index) {
+    cv::Mat depthImage = cv::Mat::zeros(_imgHeight, _imgWidth, CV_32F);
+    pcl::PointCloud<pcl::PointXYZ> targetPCD;
+    Eigen::Matrix4f baseTransform = getTransformMatrix(index);
+    Eigen::Matrix4f reflectionTransform = getTransformMatrix(index + 1);
+    pcl::transformPointCloud(inputPCD, targetPCD, reflectionTransform.inverse() * baseTransform);
+    Eigen::Vector3f imageCoords;
+    Eigen::Vector3f worldCoords;
+    for (auto &point : targetPCD.points) {
+        float d = point.z;
+        worldCoords << point.x / d, point.y / d, 1;
+        imageCoords = _cameraMatrix.inverse() * worldCoords;
+        int u = (int) imageCoords.x();
+        int v = (int) imageCoords.y();
+        if ((u > 0) && (u < _imgWidth) && (v > 0) && (v < _imgHeight) && (d > 0)) {
+            if ((depthImage.at<float>(v, u) > d) || (depthImage.at<float>(v, u) == 0)) {
+                depthImage.at<float>(v, u) = d;
+            }
+        }
+    }
+    boost::filesystem::path imgSavePath =
+            boost::filesystem::path(_savePath) / boost::filesystem::path(std::to_string(index + 1) + ".exr");
+    cv::imwrite(imgSavePath.string(), depthImage/_depthScale);
 
-cv::Mat PointCloud::imageFromPointCloud(std::vector<cv::Point3f> &points) {
-    return cv::Mat();
+    return depthImage;
 }
 
 
