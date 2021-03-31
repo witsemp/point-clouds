@@ -41,9 +41,15 @@ public:
 
     pcl::PointCloud<pcl::PointXYZ> pointCloudFromDepth(int index);
 
+    pcl::PointCloud<pcl::PointXYZ> pointCloudFromDepth(boost::filesystem::path &imgPath);
+
     pcl::PointCloud<pcl::PointXYZRGB> pointCloudFromDepthRGB(int index);
 
+    pcl::PointCloud<pcl::PointXYZRGB> pointCloudFromDepthRGB(boost::filesystem::path &depthPath, boost::filesystem::path &rgbPath);
+
     cv::Mat imageFromPointCloud(pcl::PointCloud<pcl::PointXYZ> &inputPCD, int &index);
+
+    cv::Mat imageFromPointCloud(pcl::PointCloud<pcl::PointXYZ> &inputPCD, int &index, boost::filesystem::path savePath);
 
     void setCameraMatrix(const float &f_x, const float &f_y, const float &c_x, const float &c_y);
 

@@ -55,6 +55,29 @@ pcl::PointCloud<pcl::PointXYZ> PointCloud::pointCloudFromDepth(int index) {
 
 }
 
+pcl::PointCloud<pcl::PointXYZ> PointCloud::pointCloudFromDepth(boost::filesystem::path &imgPath) {
+    cv::Mat depthImg = cv::imread(imgPath.string(), cv::IMREAD_ANYDEPTH);
+    pcl::PointCloud<pcl::PointXYZ> depthCloud;
+    Eigen::Vector3f imageCoords;
+    Eigen::Vector3f worldCoords;
+    pcl::PointXYZ point;
+    for (int row = 0; row < depthImg.rows; row++) {
+        for (int col = 0; col < depthImg.cols; col++) {
+            float d = depthImg.at<float>(row, col) * _depthScale;
+            imageCoords << col, row, 1;
+            worldCoords = d * _cameraMatrix * imageCoords;
+            point.x = worldCoords.x();
+            point.y = worldCoords.y();
+            point.z = worldCoords.z();
+            depthCloud.push_back(point);
+        }
+    }
+    return depthCloud;
+}
+
+//TODO: odrzucać maksymalną wartość głębi
+//TODO: reserve z rozmiarem rows x cols
+
 pcl::PointCloud<pcl::PointXYZRGB> PointCloud::pointCloudFromDepthRGB(int index) {
     boost::filesystem::path depthImgName(std::to_string(index) + ".exr");
     boost::filesystem::path rgbImgName(std::to_string(index));
@@ -62,6 +85,33 @@ pcl::PointCloud<pcl::PointXYZRGB> PointCloud::pointCloudFromDepthRGB(int index) 
     boost::filesystem::path rgbImgPath = boost::filesystem::path(_dataPathRGB) / rgbImgName;
     cv::Mat depthImg = cv::imread(depthImgPath.string(), cv::IMREAD_ANYDEPTH);
     cv::Mat rgbImg = cv::imread(rgbImgPath.string(), cv::IMREAD_COLOR);
+    cv::cvtColor(rgbImg, rgbImg, cv::COLOR_BGR2RGB);
+    pcl::PointCloud<pcl::PointXYZRGB> depthCloud;
+    Eigen::Vector3f imageCoords;
+    Eigen::Vector3f worldCoords;
+    pcl::PointXYZRGB point;
+    for (int row = 0; row < depthImg.rows; row++) {
+        for (int col = 0; col < depthImg.cols; col++) {
+            float d = depthImg.at<float>(row, col) * _depthScale;
+            cv::Vec3b pixelColor = rgbImg.at<cv::Vec3b>(row, col);
+            imageCoords << col, row, 1;
+            worldCoords = d * _cameraMatrix * imageCoords;
+            point.x = worldCoords.x();
+            point.y = worldCoords.y();
+            point.z = worldCoords.z();
+            point.r = pixelColor[0];
+            point.g = pixelColor[1];
+            point.b = pixelColor[2];
+            depthCloud.push_back(point);
+        }
+    }
+    return depthCloud;
+}
+
+pcl::PointCloud<pcl::PointXYZRGB>
+PointCloud::pointCloudFromDepthRGB(boost::filesystem::path &depthPath, boost::filesystem::path &rgbPath) {
+    cv::Mat depthImg = cv::imread(depthPath.string(), cv::IMREAD_ANYDEPTH);
+    cv::Mat rgbImg = cv::imread(rgbPath.string(), cv::IMREAD_COLOR);
     cv::cvtColor(rgbImg, rgbImg, cv::COLOR_BGR2RGB);
     pcl::PointCloud<pcl::PointXYZRGB> depthCloud;
     Eigen::Vector3f imageCoords;
@@ -114,6 +164,34 @@ cv::Mat PointCloud::imageFromPointCloud(pcl::PointCloud<pcl::PointXYZ> &inputPCD
 }
 
 
+cv::Mat PointCloud::imageFromPointCloud(pcl::PointCloud<pcl::PointXYZ> &inputPCD, int &index,
+                                        boost::filesystem::path savePath) {
+    cv::Mat depthImage = cv::Mat::zeros(_imgHeight, _imgWidth, CV_32F);
+    pcl::PointCloud<pcl::PointXYZ> targetPCD;
+    Eigen::Matrix4f baseTransform = getTransformMatrix(index);
+    Eigen::Matrix4f reflectionTransform = getTransformMatrix(index + 1);
+    pcl::transformPointCloud(inputPCD, targetPCD, reflectionTransform.inverse() * baseTransform);
+    Eigen::Vector3f imageCoords;
+    Eigen::Vector3f worldCoords;
+    for (auto &point : targetPCD.points) {
+        float d = point.z;
+        worldCoords << point.x / d, point.y / d, 1;
+        imageCoords = _cameraMatrix.inverse() * worldCoords;
+        int u = (int) imageCoords.x();
+        int v = (int) imageCoords.y();
+        if ((u > 0) && (u < _imgWidth) && (v > 0) && (v < _imgHeight) && (d > 0)) {
+            if ((depthImage.at<float>(v, u) > d) || (depthImage.at<float>(v, u) == 0)) {
+                depthImage.at<float>(v, u) = d;
+            }
+        }
+    }
+    cv::imwrite(savePath.string(), depthImage/_depthScale);
+    return depthImage;
+}
+
+// experimental/filesystem
+
+
 void PointCloud::setCameraMatrix(const float &f_x, const float &f_y, const float &c_x, const float &c_y) {
     _cameraMatrix(0, 0) = 1 / f_x;
     _cameraMatrix(0, 2) = (-c_x) / f_x;
@@ -151,6 +229,11 @@ Eigen::Matrix4f PointCloud::getTransformMatrix(int index) const {
 
 
 }
+
+
+
+
+
 
 
 
